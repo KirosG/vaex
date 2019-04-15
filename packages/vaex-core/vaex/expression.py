@@ -3,6 +3,7 @@ import cloudpickle as pickle
 import functools
 import operator
 import six
+import collections
 
 from future.utils import with_metaclass
 import numpy as np
@@ -19,6 +20,12 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import BytesIO as StringIO
+
+try:
+    collectionsAbc = collections.abc
+except AttributeError:
+    collectionsAbc = collections
+
 
 # TODO: repeated from dataframe.py
 default_shape = 128
@@ -514,6 +521,35 @@ def f({0}):
 
     def apply(self, f):
         return self.ds.apply(f, [self.expression])
+
+    def map(self, mapper, missing_values=None):
+        """Map values of an expression or in memory column accoring to an input
+        dictionary or a custom callable function.
+
+        :param mapper: (dict or function) used to map the values on top of the existing ones
+        :return: A vaex expression
+        :rtype: vaex.expression.Expression
+
+        Example:
+
+        >>> import vaex
+        >>> df = vaex.from_arrays(color=['red', 'red', 'blue', 'red', 'green'])
+        >>> mapper = {'red': 1, 'blue': 2, 'green': 3}
+        >>> df['color_mapped'] = df.color.map(mapper)
+        >>> df.color_mapped.values
+        array([1, 1, 2, 1, 3])
+        """
+        if isinstance(mapper, collectionsAbc.Mapping):
+            def lookup_func(x):
+                if x in mapper:
+                    return mapper[x]
+                else:
+                    return missing_values
+            return self.ds.apply(lookup_func, [self.expression])
+        elif callable(mapper):
+            return self.ds.apply(mapper, [self.expression])
+        else:
+            raise ValueError('for now "mapper" can be only be a dictionary or a callable function.')
 
 
 class FunctionSerializable(object):
